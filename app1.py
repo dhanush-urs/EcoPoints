@@ -1,5 +1,3 @@
-# Updated Flask app with responsive templates
-
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -19,9 +17,9 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-# -------------------------------
+# ------------------------------------------------
 # MODELS
-# -------------------------------
+# ------------------------------------------------
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -38,20 +36,20 @@ class Submission(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
-# -------------------------------
-# HTML TEMPLATES (MOBILE RESPONSIVE)
-# -------------------------------
+
+# ------------------------------------------------
+# TEMPLATES
+# ------------------------------------------------
 
 templates = {
-    "base.html": """
+"base.html": """
 <!DOCTYPE html>
 <html>
 <head>
     <title>EcoPoints</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <style>
@@ -89,17 +87,17 @@ templates = {
       <div class="alert alert-info">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
+
   {% block content %}{% endblock %}
 </div>
-
 </body>
 </html>
 """,
 
-    "index.html": """
+"index.html": """
 {% extends 'base.html' %}
 {% block content %}
-<div class="text-center mt-5 mobile-padding">
+<div class="text-center mt-5">
   <h1 class="text-success fw-bold">EcoPoints</h1>
   <p class="lead">Earn eco-points daily for waste segregation!</p>
   <a href="/register" class="btn btn-success btn-lg w-100 mt-3">Get Started</a>
@@ -107,10 +105,10 @@ templates = {
 {% endblock %}
 """,
 
-    "register.html": """
+"register.html": """
 {% extends 'base.html' %}
 {% block content %}
-<h2 class="mb-3">Register</h2>
+<h2>Register</h2>
 <form method="POST" class="mobile-padding">
   <input type="text" class="form-control mb-3" name="username" placeholder="Username" required>
   <input type="password" class="form-control mb-3" name="password" placeholder="Password" required>
@@ -119,10 +117,10 @@ templates = {
 {% endblock %}
 """,
 
-    "login.html": """
+"login.html": """
 {% extends 'base.html' %}
 {% block content %}
-<h2 class="mb-3">Login</h2>
+<h2>Login</h2>
 <form method="POST" class="mobile-padding">
   <input type="text" class="form-control mb-3" name="username" placeholder="Username" required>
   <input type="password" class="form-control mb-3" name="password" placeholder="Password" required>
@@ -131,33 +129,31 @@ templates = {
 {% endblock %}
 """,
 
-    "dashboard.html": """
+"dashboard.html": """
 {% extends 'base.html' %}
 {% block content %}
 <h2>Hello, {{ current_user.username }}!</h2>
 <p>Your points: <b>{{ current_user.points }}</b></p>
 
 <h4>Your Daily Submissions:</h4>
-
 <div class="table-responsive">
   <table class="table table-striped">
     <tr><th>Date</th><th>Status</th></tr>
     {% for s in submissions %}
-      <tr>
-        <td>{{ s.date }}</td>
-        <td>{{ s.status }}</td>
-      </tr>
+    <tr>
+      <td>{{ s.date }}</td>
+      <td>{{ s.status }}</td>
+    </tr>
     {% endfor %}
   </table>
 </div>
-
 {% endblock %}
 """,
 
-    "admin.html": """
+"admin.html": """
 {% extends 'base.html' %}
 {% block content %}
-<h2>Admin Panel — Today's Requests</h2>
+<h2>Admin Panel — Pending Requests Today</h2>
 
 <div class="table-responsive">
 <table class="table table-bordered">
@@ -168,12 +164,8 @@ templates = {
     <td>{{ s.date }}</td>
     <td>{{ s.status }}</td>
     <td>
-      {% if s.status == 'Pending' %}
-        <a href="/approve/{{ s.id }}" class="btn btn-success btn-sm w-100 mb-1">Yes</a>
-        <a href="/reject/{{ s.id }}" class="btn btn-danger btn-sm w-100">No</a>
-      {% else %}
-        {{ s.status }}
-      {% endif %}
+      <a href="/approve/{{ s.id }}" class="btn btn-success btn-sm w-100 mb-1">Approve</a>
+      <a href="/reject/{{ s.id }}" class="btn btn-danger btn-sm w-100">Reject</a>
     </td>
   </tr>
   {% endfor %}
@@ -183,11 +175,10 @@ templates = {
 {% if submissions|length == 0 %}
 <p class="text-muted">No pending submissions for today 🎉</p>
 {% endif %}
-
 {% endblock %}
 """,
 
-    "shop.html": """
+"shop.html": """
 {% extends 'base.html' %}
 {% block content %}
 <h2>Eco Shop 🛍️</h2>
@@ -209,39 +200,42 @@ templates = {
 </div>
 
 {% endblock %}
-"""
+""",
 }
 
 app.jinja_loader = DictLoader(templates)
 
-# -------------------------------
+
+# ------------------------------------------------
 # ROUTES
-# -------------------------------
+# ------------------------------------------------
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
 @app.route('/register', methods=['GET','POST'])
 def register():
-    if request.method == 'POST':
+    if request.method == "POST":
         username = request.form['username']
         password = generate_password_hash(request.form['password'])
 
         if User.query.filter_by(username=username).first():
-            flash("Username already exists!")
-        else:
-            user = User(username=username, password=password)
-            db.session.add(user)
-            db.session.commit()
-            flash("Registered successfully!")
-            return redirect(url_for('login'))
+            flash("Username already taken!")
+            return redirect(url_for("register"))
 
-    return render_template('register.html')
+        user = User(username=username, password=password)
+        db.session.add(user)
+        db.session.commit()
+
+        flash("Registration successful! Please login.")
+        return redirect(url_for("login"))
+
+    return render_template("register.html")
 
 @app.route('/login', methods=['GET','POST'])
 def login():
-    if request.method == 'POST':
+    if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
 
@@ -249,36 +243,41 @@ def login():
 
         if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('dashboard'))
+            return redirect(url_for("dashboard"))
 
-        flash("Invalid credentials!")
-
-    return render_template('login.html')
+        flash("Invalid username or password!")
+    return render_template("login.html")
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('index'))
+    return redirect(url_for("index"))
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
     subs = Submission.query.filter_by(user_id=current_user.id).all()
-    return render_template('dashboard.html', submissions=subs)
+    return render_template("dashboard.html", submissions=subs)
 
+
+# -----------------------------------------
+# ADMIN (accept /admin AND /admin/)
+# -----------------------------------------
 @app.route('/admin')
+@app.route('/admin/')
 @login_required
 def admin():
     if not current_user.is_admin:
-        flash("Access denied!")
-        return redirect(url_for('dashboard'))
+        flash("Access Denied! You are not an admin.")
+        return redirect(url_for("dashboard"))
 
     today = str(date.today())
-    subs = Submission.query.filter_by(date=today).all()
+    subs = Submission.query.filter_by(date=today, status="Pending").all()
     users = {u.id: u.username for u in User.query.all()}
 
-    return render_template('admin.html', submissions=subs, users=users)
+    return render_template("admin.html", submissions=subs, users=users)
+
 
 @app.route('/approve/<int:id>')
 @login_required
@@ -287,16 +286,15 @@ def approve(id):
         flash("Not allowed")
         return redirect(url_for('dashboard'))
 
-    sub = Submission.query.get(id)
-    sub.status = "Approved"
+    s = db.session.get(Submission, id)
+    s.status = "Approved"
 
-    usr = User.query.get(sub.user_id)
-    usr.points += 10
+    u = db.session.get(User, s.user_id)
+    u.points += 10
 
     db.session.commit()
-    flash("Submission approved!")
-
-    return redirect(url_for('admin'))
+    flash("Approved!")
+    return redirect(url_for("admin"))
 
 @app.route('/reject/<int:id>')
 @login_required
@@ -305,62 +303,67 @@ def reject(id):
         flash("Not allowed")
         return redirect(url_for('dashboard'))
 
-    sub = Submission.query.get(id)
-    sub.status = "Rejected"
+    s = db.session.get(Submission, id)
+    s.status = "Rejected"
 
     db.session.commit()
-    flash("Submission rejected!")
+    flash("Rejected!")
+    return redirect(url_for("admin"))
 
-    return redirect(url_for('admin'))
 
 @app.route('/shop')
 @login_required
 def shop():
     items = [
         {"key": "bottle","name": "Eco Bottle","desc": "Steel Bottle","cost":20},
-        {"key": "bag","name": "Recycled Bag","desc": "Eco-friendly Bag","cost":30},
+        {"key": "bag","name": "Recycled Bag","desc": "Eco Bag","cost":30},
         {"key": "notebook","name": "Eco Notebook","desc": "Recycled Paper","cost":25},
         {"key": "plant","name": "Mini Plant","desc": "Desk Plant","cost":40},
     ]
-
-    return render_template('shop.html', items=items)
+    return render_template("shop.html", items=items)
 
 @app.route('/buy/<item>')
 @login_required
 def buy(item):
-    shop = {
-        "bottle":{"cost":20,"name":"Eco Bottle"},
-        "bag":{"cost":30,"name":"Recycled Bag"},
-        "notebook":{"cost":25,"name":"Eco Notebook"},
-        "plant":{"cost":40,"name":"Mini Plant"}
+    shop_items = {
+        "bottle":{"cost":20, "name":"Eco Bottle"},
+        "bag":{"cost":30, "name":"Recycled Bag"},
+        "notebook":{"cost":25, "name":"Eco Notebook"},
+        "plant":{"cost":40, "name":"Mini Plant"},
     }
 
-    if item not in shop:
+    if item not in shop_items:
         flash("Invalid item!")
-        return redirect(url_for('shop'))
+        return redirect(url_for("shop"))
 
-    cost = shop[item]["cost"]
-    name = shop[item]["name"]
+    cost = shop_items[item]["cost"]
+    name = shop_items[item]["name"]
 
-    if current_user.points >= cost:
-        current_user.points -= cost
-        db.session.commit()
-        flash(f"Purchased {name}!")
-    else:
+    if current_user.points < cost:
         flash("Not enough points!")
+        return redirect(url_for("shop"))
 
-    return redirect(url_for('shop'))
+    current_user.points -= cost
+    db.session.commit()
+    flash(f"You bought {name}!")
+    return redirect(url_for("shop"))
 
-# ---------------------------------------------
-# AUTO CREATE DAILY SUBMISSION
-# ---------------------------------------------
+
+# ------------------------------------------------
+# AUTO-CREATE DAILY SUBMISSIONS
+# ------------------------------------------------
 
 @app.before_request
-def daily_entry():
+def daily_task():
     db.create_all()
 
-    today = str(date.today())
+    # FIRST USER → ADMIN
     users = User.query.all()
+    if len(users) == 1:
+        users[0].is_admin = True
+        db.session.commit()
+
+    today = str(date.today())
 
     for u in users:
         if not u.is_admin:
@@ -370,8 +373,10 @@ def daily_entry():
 
     db.session.commit()
 
-# -------------------------------
+
+# ------------------------------------------------
 # RUN SERVER
-# -------------------------------
+# ------------------------------------------------
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
