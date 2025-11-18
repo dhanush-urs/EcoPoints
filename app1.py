@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -8,9 +9,25 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from jinja2 import DictLoader
 from datetime import date
 
+# ------------------------------------------------
+# FLASK APP SETUP
+# ------------------------------------------------
+
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///waste.db'
+
+# SECRET KEY
+app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
+
+# DATABASE URL: Postgres on Render, SQLite locally
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///waste.db")
+
+# Render Postgres uses "postgres://", SQLAlchemy wants "postgresql://"
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 db = SQLAlchemy(app)
 
 login_manager = LoginManager()
@@ -38,9 +55,8 @@ class Submission(db.Model):
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-
 # ------------------------------------------------
-# TEMPLATES
+# TEMPLATES (INLINE)
 # ------------------------------------------------
 
 templates = {
@@ -205,7 +221,6 @@ templates = {
 
 app.jinja_loader = DictLoader(templates)
 
-
 # ------------------------------------------------
 # ROUTES
 # ------------------------------------------------
@@ -261,9 +276,6 @@ def dashboard():
     return render_template("dashboard.html", submissions=subs)
 
 
-# -----------------------------------------
-# ADMIN (accept /admin AND /admin/)
-# -----------------------------------------
 @app.route('/admin')
 @app.route('/admin/')
 @login_required
@@ -310,7 +322,6 @@ def reject(id):
     flash("Rejected!")
     return redirect(url_for("admin"))
 
-
 @app.route('/shop')
 @login_required
 def shop():
@@ -350,14 +361,13 @@ def buy(item):
 
 
 # ------------------------------------------------
-# AUTO-CREATE DAILY SUBMISSIONS
+# AUTO CREATE DAILY SUBMISSIONS
 # ------------------------------------------------
 
 @app.before_request
 def daily_task():
     db.create_all()
 
-    # FIRST USER → ADMIN
     users = User.query.all()
     if len(users) == 1:
         users[0].is_admin = True
@@ -372,11 +382,3 @@ def daily_task():
                 db.session.add(Submission(user_id=u.id, date=today))
 
     db.session.commit()
-
-
-# ------------------------------------------------
-# RUN SERVER
-# ------------------------------------------------
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
